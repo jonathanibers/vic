@@ -506,7 +506,7 @@ func stripCredentials(in *session.Session) error {
 		return err
 	}
 	serviceURL.User = nil
-	newclient, err := govmomi.NewClient(context.Background(), serviceURL, true)
+	newclient, err := govmomi.NewClientWithToken(context.Background(), serviceURL, true)
 	if err != nil {
 		log.Errorf("Error creating new govmomi client without credentials but with auth cookie: %s", err.Error())
 		return err

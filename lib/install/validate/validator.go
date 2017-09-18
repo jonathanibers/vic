@@ -46,6 +46,7 @@ import (
 	"github.com/vmware/vic/pkg/trace"
 	"github.com/vmware/vic/pkg/version"
 	"github.com/vmware/vic/pkg/vsphere/session"
+	"github.com/vmware/govmomi/sts"
 )
 
 const defaultSyslogPort = 514
@@ -468,17 +469,36 @@ func (v *Validator) credentials(ctx context.Context, input *data.Data, conf *con
 		return
 	}
 
-	client := &govmomi.Client{
-		Client:         vimClient,
+	// Define a new STS client, issue a token and get the response.
+
+	stsClient, err := sts.NewClient(ctx, vimClient)
+
+	securityHeader := sts.SecurityHeaderType{}
+
+	response, err := sc.Issue(ctx, securityHeader)
+
+	// Not sure how to use the token when logging in. The loginbytoken method doesn't take any parameters that a token
+	// could fit in.  It is probably passed to vSphere a different way but I wasn't able to figure out where that
+	// happens.
+
+	if err != nil {
+		v.NoteIssue(fmt.Errorf("Failed to create client for validation of operations credentials: %s", err))
+		return
+	}
+
+	// Use the Sts client to login and logout using a token instead
+
+	clientSts := &govmomi.StsClient{
+		Client:	        stsClient,
 		SessionManager: vmomisession.NewManager(vimClient),
 	}
 
-	err = client.Login(ctx, url.UserPassword(conf.Username, conf.Token))
+	err = clientSts.LoginByToken(ctx)
 	if err != nil {
 		v.NoteIssue(fmt.Errorf("Failed to validate operations credentials: %s", err))
 		return
 	}
-	client.Logout(ctx)
+	clientSts.Logout(ctx)
 
 	// confirm the RBAC configuration of the provided user
 	// TODO: this can be dropped once we move to configuration the RBAC during creation
